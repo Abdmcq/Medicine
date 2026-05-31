@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-236N37LHFR"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-236N37LHFR');
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تشخيص صور الباطنية - MCQ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Inter:wght@900&display=swap');
+        body { font-family: 'Cairo', sans-serif; background-color: #f3f4f6; }
+        .logo-font { font-family: 'Inter', sans-serif; }
+        .typing-container {
+            --chars: 17;
+            width: calc(var(--chars) * 1ch);
+            overflow: hidden;
+            white-space: nowrap;
+            display: inline-block;
+            border-right: .15em solid #4F46E5;
+            animation: type-delete-cycle 8s steps(var(--chars)) infinite, blink 0.5s step-end infinite;
+        }
+        @keyframes type-delete-cycle {
+            0% { width: 0; }
+            40% { width: calc(var(--chars) * 1ch); }
+            60% { width: calc(var(--chars) * 1ch); }
+            100% { width: 0; }
+        }
+        @keyframes blink {
+            from, to { border-color: transparent }
+            50% { border-color: #4F46E5; }
+        }
+        .ecg-container {
+            position: relative;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            height: 80px;
+            border: 2px solid #1f2937;
+        }
+        #ecgCanvas { width: 100%; height: 100%; filter: drop-shadow(0 0 5px #14B8A6); }
+        .option-btn {
+            transition: all 0.2s;
+            text-align: right;
+            padding: 10px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            width: 100%;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        .option-btn:hover:not(:disabled) { background-color: #f3f4f6; border-color: #4F46E5; }
+        .option-btn.correct { background-color: #d1fae5; border-color: #10b981; color: #065f46; }
+        .option-btn.wrong { background-color: #fee2e2; border-color: #ef4444; color: #991b1b; }
+        .tg-pulse { animation: pulse-blue 2s infinite; }
+        @keyframes pulse-blue {
+            0% { box-shadow: 0 0 0 0 rgba(34, 158, 217, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(34, 158, 217, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 158, 217, 0); }
+        }
+        .loading-screen {
+            position: fixed; inset: 0;
+            background: linear-gradient(135deg, #4F46E5, #7C3AED);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 9999; transition: opacity 0.5s ease;
+        }
+        .loading-screen.fade-out { opacity: 0; pointer-events: none; }
+        .spinner {
+            width: 48px; height: 48px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* شاشة الحظر */
+        .ban-overlay {
+            position: fixed; inset: 0;
+            background: linear-gradient(135deg, #1a0000, #3b0000);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 9998;
+        }
+
+        /* شاشة الصيانة */
+        .maintenance-overlay {
+            position: fixed; inset: 0;
+            background: linear-gradient(135deg, #0a0a2e, #1a1a4e);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 9997;
+        }
+
+        /* شاشة "تليجرام فقط" */
+        .tg-only-overlay {
+            position: fixed; inset: 0;
+            background: linear-gradient(135deg, #0d1117, #161b22);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 9996;
+        }
+
+        .floating-dots span {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            margin: 0 3px;
+            animation: float 1.4s ease-in-out infinite;
+        }
+        .floating-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .floating-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); opacity: 0.5; }
+            50% { transform: translateY(-8px); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <div id="loadingScreen" class="loading-screen">
+        <div class="text-center text-white">
+            <div class="spinner mx-auto mb-4"></div>
+            <p class="text-lg font-bold">جاري التحقق من الهوية...</p>
+        </div>
+    </div>
+
+    <div id="app" class="flex-grow flex flex-col"></div>
+
+    <footer class="bg-gray-800 text-white text-center p-3 text-sm">
+        <p>اعداد عبدالرحمن حسن</p>
+    </footer>
+
+    <script>
+        // ================================================================
+        // إعدادات
+        // ================================================================
+        const BACKEND_URL = 'https://ban-v1m0.onrender.com';
+
+        // ================================================================
+        // متغيرات Telegram Web App
+        // ================================================================
+        let tgUser = null;
+        let tgUserId = null;
+        let tgFirstName = '';
+        let tgUsername = '';
+
+        const playlist = [
+            { id: 1, src: "https://files.catbox.moe/zerml1.mp3", title: "شلون الدنيا تكون بدونك" },
+            { id: 2, src: "https://files.catbox.moe/t5x3ri.mp3", title: "وائل كافوري" },
+            { id: 3, src: "https://files.catbox.moe/7l5rmk.m4a", title: "ماجد المهندس" },
+            { id: 4, src: "https://files.catbox.moe/s2yksc.m4a", title: "ترك الروح" },
+            { id: 5, src: "https://files.catbox.moe/5nv92u.m4a", title: "بعيني" },
+            { id: 6, src: "https://files.catbox.moe/3omzzh.m4a", title: "بكل العمر" },
+            { id: 7, src: "https://files.catbox.moe/8za7oy.mp3", title: "الحبيب" }
+        ];
+
+        const quizData = [
+            { id: 1,  image: "https://files.catbox.moe/fgo85x.jpeg", correctDiagnosis: "Bilateral Pneumonia" },
+            { id: 2,  image: "https://files.catbox.moe/iz8pgw.jpeg", correctDiagnosis: "Bilateral Pneumonia" },
+            { id: 3,  image: "https://files.catbox.moe/ddoytb.jpeg", correctDiagnosis: "Lobar Pneumonia" },
+            { id: 4,  image: "https://files.catbox.moe/5akeyy.jpeg", correctDiagnosis: "Lobar Pneumonia" },
+            { id: 5,  image: "https://files.catbox.moe/feq6s5.jpeg", correctDiagnosis: "Lung Abscess" },
+            { id: 6,  image: "https://files.catbox.moe/9umxvi.jpeg", correctDiagnosis: "Lung Cyst" },
+            { id: 7,  image: "https://files.catbox.moe/omf64v.jpeg", correctDiagnosis: "Lung Cyst" },
+            { id: 8,  image: "https://files.catbox.moe/axbl01.jpeg", correctDiagnosis: "Lung Tumor" },
+            { id: 9,  image: "https://files.catbox.moe/l17w81.jpeg", correctDiagnosis: "Normal Chest X-Ray" },
+            { id: 10, image: "https://files.catbox.moe/i1pan8.jpeg", correctDiagnosis: "Pleural Effusion" },
+            { id: 11, image: "https://files.catbox.moe/0i06m1.jpeg", correctDiagnosis: "Pneumothorax" },
+            { id: 12, image: "https://files.catbox.moe/lcq437.jpeg", correctDiagnosis: "Pulmonary Emphysema" },
+            { id: 13, image: "https://files.catbox.moe/54go3z.jpeg", correctDiagnosis: "Pulmonary Emphysema" },
+            { id: 14, image: "https://files.catbox.moe/crn4dl.jpeg", correctDiagnosis: "Pulmonary Tuberculosis" },
+            { id: 15, image: "https://files.catbox.moe/epdrj4.jpeg", correctDiagnosis: "Pulmonary Tuberculosis" },
+            { id: 16, image: "https://files.catbox.moe/n0slyj.jpeg", correctDiagnosis: "Acid Fast Bacilli" },
+            { id: 17, image: "https://files.catbox.moe/zvtb9w.jpeg", correctDiagnosis: "Gram Negative Bacteria" },
+            { id: 18, image: "https://files.catbox.moe/oovakv.jpeg", correctDiagnosis: "Streptococcus Pneumonia" }
+        ];
+
+        const allDiagnoses = Array.from(new Set(quizData.map(d => d.correctDiagnosis)));
+        const categories = {
+            xray: ["Pneumonia", "Abscess", "Cyst", "Tumor", "Normal Chest", "Pleural", "Pneumothorax", "Emphysema", "Tuberculosis"],
+            micro: ["Bacilli", "Bacteria", "Streptococcus"]
+        };
+
+        function getOptionsFor(correct) {
+            let categoryKey = null;
+            for (const key in categories) {
+                if (categories[key].some(keyword => correct.toLowerCase().includes(keyword.toLowerCase()))) {
+                    categoryKey = key; break;
+                }
+            }
+            let pool = allDiagnoses.filter(d => d !== correct);
+            let similar = [];
+            if (categoryKey) { similar = pool.filter(d => categories[categoryKey].some(keyword => d.toLowerCase().includes(keyword.toLowerCase()))); }
+            shuffleArray(similar); shuffleArray(pool);
+            let chosen = [];
+            chosen.push(...similar.slice(0, 3));
+            if (chosen.length < 3) { let remaining = pool.filter(p => !chosen.includes(p)); chosen.push(...remaining.slice(0, 3 - chosen.length)); }
+            chosen.push(correct);
+            shuffleArray(chosen);
+            return chosen;
+        }
+
+        let results = {};
+        const appDiv = document.getElementById('app');
+        let audioPlayer = new Audio();
+        audioPlayer.crossOrigin = "anonymous";
+        audioPlayer.preload = "auto";
+        let currentTrackIndex = 0;
+        let isPlayerInitialized = false;
+        let score = 0;
+        let audioCtx, analyser, source, dataArray, canvas, canvasCtx;
+
+        function initializeAudioPlayer() {
+            if (isPlayerInitialized) return;
+            audioPlayer.src = playlist[currentTrackIndex].src;
+            audioPlayer.addEventListener('loadedmetadata', updatePlayerUI);
+            audioPlayer.addEventListener('ended', playNext);
+            audioPlayer.addEventListener('timeupdate', () => {
+                const currentTimeDisplay = document.getElementById('currentTime');
+                const progressBar = document.getElementById('progressBar');
+                if (currentTimeDisplay) currentTimeDisplay.textContent = formatTime(audioPlayer.currentTime);
+                if (progressBar && !isNaN(audioPlayer.duration) && audioPlayer.duration > 0) {
+                    progressBar.value = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+                }
+            });
+            audioPlayer.addEventListener('play', () => { updatePlayerUI(); setupVisualizer(); });
+            audioPlayer.addEventListener('pause', updatePlayerUI);
+            isPlayerInitialized = true;
+        }
+
+        function setupVisualizer() {
+            if (audioCtx) return;
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioCtx.createAnalyser();
+                source = audioPlayer.createMediaElementSource(audioPlayer);
+                source.connect(analyser);
+                analyser.connect(audioCtx.destination);
+                analyser.fftSize = 256;
+                const bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+                canvas = document.getElementById('ecgCanvas');
+                if (canvas) { canvasCtx = canvas.getContext('2d'); drawECG(); }
+            } catch(e) { console.log("Visualizer blocked"); }
+        }
+
+        function drawECG() {
+            if (!canvasCtx) return;
+            requestAnimationFrame(drawECG);
+            analyser.getByteFrequencyData(dataArray);
+            canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+            canvasCtx.strokeStyle = '#064e3b';
+            canvasCtx.lineWidth = 0.5;
+            for (let i = 0; i < canvas.width; i += 20) { canvasCtx.beginPath(); canvasCtx.moveTo(i, 0); canvasCtx.lineTo(i, canvas.height); canvasCtx.stroke(); }
+            for (let i = 0; i < canvas.height; i += 20) { canvasCtx.beginPath(); canvasCtx.moveTo(0, i); canvasCtx.lineTo(canvas.width, i); canvasCtx.stroke(); }
+            canvasCtx.lineWidth = 2; canvasCtx.strokeStyle = '#14B8A6'; canvasCtx.beginPath();
+            let sliceWidth = canvas.width * 1.0 / dataArray.length;
+            let x = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                let v = dataArray[i] / 128.0;
+                let y = (v * canvas.height / 2);
+                if (i === 0) canvasCtx.moveTo(x, canvas.height / 2 - y / 2);
+                else canvasCtx.lineTo(x, canvas.height / 2 - y / 2);
+                x += sliceWidth;
+            }
+            canvasCtx.lineTo(canvas.width, canvas.height / 2);
+            canvasCtx.stroke();
+        }
+
+        function updatePlayerUI() {
+            const trackTitle = document.getElementById('trackTitle');
+            const playPauseButton = document.getElementById('playPauseButton');
+            const durationDisplay = document.getElementById('duration');
+            if (trackTitle) trackTitle.textContent = playlist[currentTrackIndex].title;
+            if (durationDisplay && !isNaN(audioPlayer.duration)) durationDisplay.textContent = formatTime(audioPlayer.duration);
+            if (playPauseButton) {
+                playPauseButton.innerHTML = audioPlayer.paused ?
+                    `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19L18 12L6 5V19Z"/></svg>` :
+                    `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19H8V5H6V19ZM16 5V19H18V5H16Z"/></svg>`;
+            }
+        }
+
+        function togglePlayPause() {
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            if (audioPlayer.paused) audioPlayer.play().catch(e => console.error(e));
+            else audioPlayer.pause();
+            updatePlayerUI();
+        }
+
+        function playNext() {
+            audioPlayer.pause();
+            currentTrackIndex = (currentTrackIndex + 1) % playlist.length;
+            audioPlayer.src = playlist[currentTrackIndex].src;
+            audioPlayer.load(); audioPlayer.play().catch(e => console.error(e));
+            updatePlayerUI();
+        }
+
+        function playPrev() {
+            audioPlayer.pause();
+            currentTrackIndex = (currentTrackIndex - 1 + playlist.length) % playlist.length;
+            audioPlayer.src = playlist[currentTrackIndex].src;
+            audioPlayer.load(); audioPlayer.play().catch(e => console.error(e));
+            updatePlayerUI();
+        }
+
+        function seek(value) { if (!isNaN(audioPlayer.duration)) audioPlayer.currentTime = (value / 100) * audioPlayer.duration; }
+        function skipTime(time) { audioPlayer.currentTime += time; }
+        function formatTime(seconds) {
+            const min = Math.floor(seconds / 60);
+            const sec = Math.floor(seconds % 60);
+            return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+        }
+
+        function hideLoading() {
+            const loadingEl = document.getElementById('loadingScreen');
+            if (loadingEl) {
+                loadingEl.classList.add('fade-out');
+                setTimeout(() => loadingEl.remove(), 500);
+            }
+        }
+
+        function lockPage() {
+            document.body.style.overflow = 'hidden';
+            history.pushState(null, '', location.href);
+            window.onpopstate = () => {
+                history.pushState(null, '', location.href);
+            };
+        }
+
+        // ================================================================
+        // شاشة: تليجرام فقط
+        // ================================================================
+        function renderTelegramOnlyScreen() {
+            hideLoading();
+            lockPage();
+            appDiv.innerHTML = `
+                <div class="tg-only-overlay">
+                    <div class="text-center px-8 py-10 max-w-sm w-full">
+                        <div class="mb-6">
+                            <div class="w-20 h-20 mx-auto bg-gradient-to-br from-sky-500 to-blue-600 rounded-full flex items-center justify-center shadow-2xl" style="box-shadow: 0 0 40px rgba(14, 165, 233, 0.4)">
+                                <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.11.02-1.93 1.23-5.46 3.62-.51.35-.98.52-1.4.51-.46-.01-1.35-.26-2.01-.48-.81-.27-1.45-.42-1.39-.89.03-.24.36-.49.99-.75 3.88-1.68 6.47-2.79 7.76-3.32 3.69-1.5 4.45-1.76 4.96-1.77.11 0 .36.03.52.17.13.12.17.28.18.41-.01.07-.01.14-.02.21z"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <h1 class="text-2xl font-black text-white mb-3">تليجرام فقط</h1>
+                        <p class="text-gray-400 text-base mb-2">هذا الموقع متاح حصراً من داخل تطبيق تليجرام</p>
+                        <p class="text-gray-600 text-sm mb-8">افتح الرابط عبر البوت على تليجرام للوصول</p>
+                        <div class="floating-dots flex justify-center">
+                            <span class="bg-sky-500"></span>
+                            <span class="bg-blue-500"></span>
+                            <span class="bg-indigo-500"></span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ================================================================
+        // شاشة: الصيانة
+        // ================================================================
+        function renderMaintenanceScreen(firstName) {
+            hideLoading();
+            lockPage();
+            appDiv.innerHTML = `
+                <div class="maintenance-overlay">
+                    <div class="text-center px-8 py-10 max-w-sm w-full">
+                        <div class="text-7xl mb-6" style="filter: drop-shadow(0 0 20px rgba(99, 102, 241, 0.6))">⚙️</div>
+                        <h1 class="text-2xl font-black text-indigo-300 mb-4">الموقع قيد الصيانة</h1>
+                        <div class="bg-indigo-900/40 border border-indigo-700/50 rounded-xl p-5 mb-6">
+                            <p class="text-gray-200 text-base leading-relaxed">
+                                عزيزي <span class="text-indigo-300 font-bold">${firstName || 'الزائر'}</span> الموقع قيد الصيانة حاليًا،
+                                سيتم فتحه فور إكمال السيد <span class="text-white font-bold">عبدالرحمن حسن</span> إجراءات الصيانة.
+                            </p>
+                        </div>
+                        <div class="flex justify-center items-center gap-2">
+                            <div class="w-2 h-2 bg-indigo-400 rounded-full animate-ping"></div>
+                            <div class="w-2 h-2 bg-indigo-400 rounded-full animate-ping" style="animation-delay:0.3s"></div>
+                            <div class="w-2 h-2 bg-indigo-400 rounded-full animate-ping" style="animation-delay:0.6s"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ================================================================
+        // شاشة: الحظر (مع دعم الرسالة المخصصة)
+        // ================================================================
+        function renderBanScreen(customMessage) {
+            hideLoading();
+            lockPage();
+
+            const defaultMsg = 'اذا تدعيلي بالرسوب ماكو داعي تنجح انت هم';
+            const banMsg = customMessage || defaultMsg;
+
+            appDiv.innerHTML = `
+                <div class="ban-overlay">
+                    <div class="text-center px-6 py-10 max-w-sm w-full">
+                        <div class="mb-6">
+                            <img src="https://files.catbox.moe/1hc2t0.png" alt="banned"
+                                 class="mx-auto rounded-2xl shadow-2xl max-w-[260px] w-full"
+                                 style="box-shadow: 0 0 40px rgba(239,68,68,0.35)">
+                        </div>
+                        <div class="bg-red-950/60 border border-red-800/50 rounded-xl px-5 py-4 mb-4">
+                            <p class="text-gray-200 text-base leading-relaxed">${banMsg}</p>
+                        </div>
+                        <div class="mt-4 flex justify-center gap-2">
+                            <div class="w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
+                            <div class="w-2 h-2 bg-red-500 rounded-full animate-ping" style="animation-delay:0.2s"></div>
+                            <div class="w-2 h-2 bg-red-500 rounded-full animate-ping" style="animation-delay:0.4s"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ================================================================
+        // حظر بعد الضغط على الزر
+        // ================================================================
+        async function handleSelfBan() {
+            // عرض شاشة الحظر فوراً بالرسالة الافتراضية
+            renderBanScreen(null);
+
+            if (tgUserId) {
+                try {
+                    await fetch(`${BACKEND_URL}/api/ban`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userId: tgUserId,
+                            firstName: tgFirstName,
+                            username: tgUsername,
+                            reason: 'button_click'
+                        })
+                    });
+                } catch (error) {
+                    console.error('Failed to send ban request:', error);
+                }
+            }
+        }
+
+        // ================================================================
+        // الشاشة الرئيسية
+        // ================================================================
+        function renderGateScreen() {
+            hideLoading();
+            appDiv.innerHTML = `
+                <div class="flex-grow flex items-center justify-center p-4">
+                    <div class="bg-white shadow-2xl rounded-xl p-8 max-w-sm md:max-w-md w-full text-center border-t-4 border-indigo-600 relative overflow-hidden">
+                        <div class="mb-8 h-6 flex justify-center">
+                            <h2 class="text-xl text-indigo-700 font-extrabold logo-font typing-container">Abdulrahman Hasan</h2>
+                        </div>
+
+                        <!-- الصورة الرئيسية -->
+                        <div class="mb-6 flex justify-center">
+                            <img src="https://files.catbox.moe/w1c640.png" alt="gate image"
+                                 class="rounded-2xl shadow-lg max-w-[240px] w-full object-cover"
+                                 style="max-height:260px">
+                        </div>
+
+                        <div class="space-y-4 mb-6">
+                            <button onclick="renderQuizScreen()"
+                                class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-xl transition duration-300 transform hover:scale-[1.02] shadow-lg text-lg">
+                                بحبك
+                            </button>
+                            <button onclick="handleSelfBan()"
+                                class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-4 rounded-xl transition duration-300 transform hover:scale-[1.02] shadow text-lg">
+                                ما بحبك
+                            </button>
+                        </div>
+
+                        ${tgUserId ? `
+                        <div class="pt-4 border-t border-gray-100 mb-4">
+                            <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full">
+                                <svg class="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+                                <span class="text-sm font-bold text-blue-700">${tgFirstName}</span>
+                                ${tgUsername ? `<span class="text-xs text-blue-500">@${tgUsername}</span>` : ''}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        <div class="pt-6 border-t border-gray-100">
+                            <a href="https://t.me/ll7ddd" target="_blank"
+                               class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-100 rounded-full hover:from-sky-100 hover:to-indigo-100 transition-all duration-300 group tg-pulse">
+                                <div class="bg-sky-500 p-1.5 rounded-full text-white shadow-sm group-hover:rotate-12 transition-transform">
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.11.02-1.93 1.23-5.46 3.62-.51.35-.98.52-1.4.51-.46-.01-1.35-.26-2.01-.48-.81-.27-1.45-.42-1.39-.89.03-.24.36-.49.99-.75 3.88-1.68 6.47-2.79 7.76-3.32 3.69-1.5 4.45-1.76 4.96-1.77.11 0 .36.03.52.17.13.12.17.28.18.41-.01.07-.01.14-.02.21z"/>
+                                    </svg>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[10px] text-sky-600 font-bold leading-none mb-1">اعداد ولمسات</p>
+                                    <p class="text-sm font-black text-gray-800 leading-none">A. Hasan <span class="text-sky-500">@ll7ddd</span></p>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderQuizScreen() {
+            initializeAudioPlayer(); shuffleArray(quizData); score = 0; results = {};
+            let quizHTML = quizData.map((item, index) => {
+                const options = getOptionsFor(item.correctDiagnosis);
+                return `
+                <div id="card-${item.id}" class="bg-white shadow-lg rounded-xl p-5 mb-8 transition-shadow duration-300 border border-gray-100">
+                    <h2 class="text-lg font-semibold text-indigo-700 mb-4 border-b pb-2">التشخيص رقم #${index + 1}</h2>
+                    <div class="w-full flex justify-center mb-6">
+                        <img src="${item.image}" referrerpolicy="no-referrer" alt="صورة تشخيص" class="rounded-lg shadow-md max-w-full h-auto object-contain max-h-[350px]">
+                    </div>
+                    <div class="grid grid-cols-1 gap-3" id="options-container-${item.id}">
+                        ${options.map(opt => `
+                            <button onclick="handleSelection(${item.id}, '${opt.replace(/'/g, "\\'")}', '${item.correctDiagnosis.replace(/'/g, "\\'")}', this)" class="option-btn">
+                                ${opt}
+                            </button>
+                        `).join('')}
+                    </div>
+                    <div id="status-${item.id}" class="mt-4 p-3 rounded-lg hidden text-center font-bold"></div>
+                </div>`;
+            }).join('');
+
+            appDiv.innerHTML = `
+                <header class="bg-white/95 backdrop-blur-sm shadow-sm p-2 sticky top-0 z-50 border-b border-gray-100">
+                    <div class="container mx-auto max-w-4xl flex justify-between items-center px-2">
+                        <h1 class="text-sm font-bold text-gray-700 logo-font tracking-tight">Abdulrahman Hasan</h1>
+                        <div class="bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100 flex items-center gap-1.5 shadow-sm">
+                            <span class="text-xs font-bold text-indigo-600">الدرجة:</span>
+                            <span id="scoreCounter" class="text-xs font-black text-indigo-800">0 / ${quizData.length}</span>
+                        </div>
+                    </div>
+                </header>
+                <main class="container mx-auto max-w-4xl p-4 md:p-8 flex-grow">
+                    <div class="bg-white shadow-xl rounded-xl p-4 mb-8 border-t-4 border-teal-500">
+                        <h2 class="text-center text-md font-bold text-gray-800 mb-2">هواجيس خفيفة</h2>
+                        <div class="flex flex-col space-y-3">
+                            <div class="ecg-container"><canvas id="ecgCanvas"></canvas>
+                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    <p id="trackTitle" class="text-xs font-bold text-white bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm truncate max-w-[80%]">...</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2 w-full" dir="ltr">
+                                <span id="currentTime" class="text-xs text-gray-600 min-w-[30px] text-right">0:00</span>
+                                <input type="range" id="progressBar" min="0" max="100" value="0" step="0.1" onchange="seek(this.value)" class="flex-grow h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-teal-500">
+                                <span id="duration" class="text-xs text-gray-600 min-w-[30px] text-left">0:00</span>
+                            </div>
+                            <div class="flex justify-center items-center space-x-4">
+                                <button onclick="skipTime(-10)" class="p-1.5 text-teal-500 bg-teal-50 rounded-full hover:bg-teal-100"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z"></path></svg></button>
+                                <button onclick="playNext()" class="p-1.5 text-gray-500 hover:text-teal-500"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19L6 5L9 8V16L6 19ZM18 12L9 19V5L18 12Z"/></svg></button>
+                                <button id="playPauseButton" onclick="togglePlayPause()" class="p-2.5 bg-teal-500 text-white rounded-full shadow hover:bg-teal-600 transition duration-150 transform hover:scale-105"></button>
+                                <button onclick="playPrev()" class="p-1.5 text-gray-500 hover:text-teal-500"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18 19L18 5L15 8V16L18 19ZM6 12L15 5V19L6 12Z"/></svg></button>
+                                <button onclick="skipTime(10)" class="p-1.5 text-teal-500 bg-teal-50 rounded-full hover:bg-teal-100"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z"></path></svg></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid gap-8 md:grid-cols-2">${quizHTML}</div>
+                    <div id="quizSummary" class="mt-10 p-5 bg-yellow-100 border-l-4 border-yellow-500 rounded-lg text-center font-medium text-gray-700 hidden"></div>
+                </main>`;
+            updatePlayerUI(); audioPlayer.play().catch(() => {});
+        }
+
+        function handleSelection(id, selected, correct, btn) {
+            if (results[id] !== undefined) return;
+            const container = document.getElementById(`options-container-${id}`);
+            const buttons = container.getElementsByTagName('button');
+            const statusDiv = document.getElementById(`status-${id}`);
+            if (selected === correct) {
+                btn.classList.add('correct'); statusDiv.innerHTML = "&#9989; جوابك/ج صح";
+                statusDiv.className = "mt-4 p-3 rounded-lg block bg-green-100 text-green-800 text-sm";
+                score++; results[id] = true;
+            } else {
+                btn.classList.add('wrong'); statusDiv.innerHTML = `&#10060; التشخيص خطأ: <br>${correct}`;
+                statusDiv.className = "mt-4 p-3 rounded-lg block bg-red-100 text-red-800 text-sm";
+                results[id] = false;
+                for (let b of buttons) { if (b.innerText.trim() === correct) b.classList.add('correct'); }
+            }
+            for (let b of buttons) b.disabled = true;
+            updateScoreUI();
+        }
+
+        function updateScoreUI() {
+            document.getElementById('scoreCounter').innerText = `${score} / ${quizData.length}`;
+            const totalAnswered = Object.keys(results).length;
+            if (totalAnswered === quizData.length) {
+                const summaryDiv = document.getElementById('quizSummary');
+                summaryDiv.classList.remove('hidden');
+                summaryDiv.innerHTML = `<p class="text-lg font-bold">خلصت الأسئلة!</p><p class="mt-1">درجتك النهائية: ${score} من ${quizData.length}</p>`;
+            }
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        // ================================================================
+        // منطق التهيئة الرئيسي
+        // ================================================================
+        async function initTelegramMiniApp() {
+            try {
+                const tg = window.Telegram && window.Telegram.WebApp;
+
+                // ── ميزة 1: تليجرام فقط ──
+                // نفحص إذا كانت initData موجودة (تعني الدخول من داخل تليجرام)
+                const isInsideTelegram = tg && tg.initData && tg.initData.length > 0;
+
+                if (!isInsideTelegram) {
+                    renderTelegramOnlyScreen();
+                    return;
+                }
+
+                // إعداد تليجرام
+                tg.ready();
+                tg.expand();
+                tg.setHeaderColor('#4F46E5');
+                tg.setBackgroundColor('#f3f4f6');
+
+                tgUser = tg.initDataUnsafe && tg.initDataUnsafe.user;
+                if (tgUser) {
+                    tgUserId = tgUser.id;
+                    tgFirstName = tgUser.first_name || '';
+                    tgUsername = tgUser.username || '';
+                }
+
+                // ── فحص الحظر والصيانة من الخادم ──
+                if (tgUserId) {
+                    const checkData = await checkUserStatus(tgUserId);
+
+                    // فحص الحظر أولاً
+                    if (checkData.blocked) {
+                        renderBanScreen(checkData.customMessage);
+                        return;
+                    }
+
+                    // ── ميزة 2: وضع الصيانة ──
+                    if (checkData.maintenance) {
+                        renderMaintenanceScreen(tgFirstName);
+                        return;
+                    }
+
+                    // تسجيل الزيارة (في الخلفية، لا نحتاج انتظارها)
+                    notifyUserVisit(tgUserId, tgFirstName, tgUsername)
+                        .catch(err => console.error('Visit notify error:', err));
+                }
+
+                // عرض الشاشة الرئيسية
+                renderGateScreen();
+
+            } catch (error) {
+                console.error('Init error:', error);
+                // في حالة خطأ في الشبكة - نعرض الشاشة الرئيسية (لا نعاقب المستخدم)
+                renderGateScreen();
+            }
+        }
+
+        // ================================================================
+        // فحص حالة المستخدم (حظر + صيانة + رسالة مخصصة)
+        // ================================================================
+        async function checkUserStatus(userId) {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/check/${userId}`);
+                const data = await response.json();
+                return {
+                    blocked: data.blocked === true,
+                    customMessage: data.customMessage || null,
+                    maintenance: data.maintenance === true
+                };
+            } catch (error) {
+                console.error('Failed to check user status:', error);
+                return { blocked: false, customMessage: null, maintenance: false };
+            }
+        }
+
+        // ================================================================
+        // تسجيل زيارة
+        // ================================================================
+        async function notifyUserVisit(userId, firstName, username) {
+            await fetch(`${BACKEND_URL}/api/visit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, firstName, username, timestamp: new Date().toISOString() })
+            });
+        }
+
+        // ================================================================
+        // بدء التشغيل
+        // ================================================================
+        window.onload = function() {
+            initTelegramMiniApp();
+        };
+    </script>
+</body>
+</html>
