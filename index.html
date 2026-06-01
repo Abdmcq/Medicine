@@ -392,12 +392,19 @@
         // ================================================================
         // شاشة: الحظر (مع دعم الرسالة المخصصة)
         // ================================================================
-        function renderBanScreen(customMessage) {
+        // isManual=true = حظر يدوي من البوت، لا يظهر زر رفع الحظر
+        function renderBanScreen(customMessage, isManual) {
             hideLoading();
             lockPage();
 
-            const defaultMsg = 'اذا تدعيلي بالرسوب ماكو داعي تنجح انت هم';
+            const defaultMsg = 'جوهر هذا الطالب/ة مابيحبو خالو والخال زعل';
             const banMsg = customMessage || defaultMsg;
+
+            const unbanButton = !isManual ? `
+                <button onclick="handleSelfUnban()"
+                    class="mt-5 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-xl transition duration-300 transform hover:scale-[1.02] shadow-lg text-base">
+                    خلص خلص بحبك وافتحلي الموقع
+                </button>` : '';
 
             appDiv.innerHTML = `
                 <div class="ban-overlay">
@@ -407,10 +414,11 @@
                                  class="mx-auto rounded-2xl shadow-2xl max-w-[260px] w-full"
                                  style="box-shadow: 0 0 40px rgba(239,68,68,0.35)">
                         </div>
-                        <div class="bg-red-950/60 border border-red-800/50 rounded-xl px-5 py-4 mb-4">
+                        <div class="bg-red-950/60 border border-red-800/50 rounded-xl px-5 py-4 mb-2">
                             <p class="text-gray-200 text-base leading-relaxed">${banMsg}</p>
                         </div>
-                        <div class="mt-4 flex justify-center gap-2">
+                        ${unbanButton}
+                        <div class="mt-5 flex justify-center gap-2">
                             <div class="w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
                             <div class="w-2 h-2 bg-red-500 rounded-full animate-ping" style="animation-delay:0.2s"></div>
                             <div class="w-2 h-2 bg-red-500 rounded-full animate-ping" style="animation-delay:0.4s"></div>
@@ -421,11 +429,36 @@
         }
 
         // ================================================================
+        // رفع الحظر الذاتي عبر زر "خلص خلص بحبك"
+        // ================================================================
+        async function handleSelfUnban() {
+            if (!tgUserId) return;
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/self-unban`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: tgUserId,
+                        firstName: tgFirstName,
+                        username: tgUsername
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    document.body.style.overflow = '';
+                    window.onpopstate = null;
+                    renderGateScreen();
+                }
+            } catch (error) {
+                console.error('Self-unban failed:', error);
+            }
+        }
+
+        // ================================================================
         // حظر بعد الضغط على الزر
         // ================================================================
         async function handleSelfBan() {
-            // عرض شاشة الحظر فوراً بالرسالة الافتراضية
-            renderBanScreen(null);
+            renderBanScreen(null, false);
 
             if (tgUserId) {
                 try {
@@ -635,7 +668,9 @@
 
                     // فحص الحظر أولاً
                     if (checkData.blocked) {
-                        renderBanScreen(checkData.customMessage);
+                        // isManual = الحظر جاء من البوت يدوياً أو custom_message موجودة
+                        const isManual = checkData.banSource === 'manual_block' || !!checkData.customMessage;
+                        renderBanScreen(checkData.customMessage, isManual);
                         return;
                     }
 
@@ -670,11 +705,12 @@
                 return {
                     blocked: data.blocked === true,
                     customMessage: data.customMessage || null,
+                    banSource: data.banSource || null,
                     maintenance: data.maintenance === true
                 };
             } catch (error) {
                 console.error('Failed to check user status:', error);
-                return { blocked: false, customMessage: null, maintenance: false };
+                return { blocked: false, customMessage: null, banSource: null, maintenance: false };
             }
         }
 
