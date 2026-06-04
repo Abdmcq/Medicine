@@ -429,7 +429,7 @@
         async function handleSelfUnban() {
             if (!tgUserId) return;
             try {
-                const response = await fetch(`${BACKEND_URL}/api/self-unban`, {
+                const response = await fetch(`${BACKEND_URL}/api/unban`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -494,7 +494,7 @@
                         <div class="space-y-4 mb-6">
                             <button onclick="renderQuizScreen()"
                                 class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-xl transition duration-300 transform hover:scale-[1.02] shadow-lg text-lg">
-                                بحبك امين
+                                امين
                             </button>
                             <button onclick="handleSelfBan()"
                                 class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-4 rounded-xl transition duration-300 transform hover:scale-[1.02] shadow text-lg">
