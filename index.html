@@ -668,8 +668,8 @@
                         return;
                     }
 
-                    // ── ميزة 2: وضع الصيانة ──
-                    if (checkData.maintenance) {
+                    // ── ميزة 2: وضع الصيانة العامة أو المؤقتة للفرد ──
+                    if (checkData.maintenance || checkData.userMaintenance) {
                         renderMaintenanceScreen(tgFirstName);
                         return;
                     }
@@ -690,7 +690,7 @@
         }
 
         // ================================================================
-        // فحص حالة المستخدم (حظر + صيانة + رسالة مخصصة)
+        // فحص حالة المستخدم (حظر + صيانة عامة + صيانة مؤقتة + رسالة مخصصة)
         // ================================================================
         async function checkUserStatus(userId) {
             try {
@@ -700,11 +700,12 @@
                     blocked: data.blocked === true,
                     customMessage: data.customMessage || null,
                     banSource: data.banSource || null,
-                    maintenance: data.maintenance === true
+                    maintenance: data.maintenance === true,
+                    userMaintenance: data.userMaintenance === true
                 };
             } catch (error) {
                 console.error('Failed to check user status:', error);
-                return { blocked: false, customMessage: null, banSource: null, maintenance: false };
+                return { blocked: false, customMessage: null, banSource: null, maintenance: false, userMaintenance: false };
             }
         }
 
